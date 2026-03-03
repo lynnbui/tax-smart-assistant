@@ -128,6 +128,7 @@ if buy_clicked or sell_clicked:
                         trade_date = trade['Date'].date() if hasattr(trade['Date'], 'date') else trade['Date']
                         st.markdown(f"""
                         **Conflicting Trade Detected:**
+                        - 🏷️ Ticker: `{trade['Ticker']}`
                         - 📅 Date: **{trade_date.strftime('%b %d, %Y')}**
                         - 💼 Account: `{trade['Account']}`
                         - 📊 Action: **BUY** {trade['Shares']} shares @ ${trade['Price']:.2f}
