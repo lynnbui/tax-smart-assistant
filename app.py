@@ -33,24 +33,15 @@ def check_superficial_loss(
     proposed_sale_date: date,
     window_days: int = 30
 ) -> tuple[bool, pd.DataFrame]:
-    """
-    Check CRA ITA 54 superficial loss rules.
-    
-    Returns:
-        tuple: (has_conflict: bool, conflicting_trades: DataFrame)
-    
-    Rule: Loss denied if identical property bought within 30 days BEFORE or AFTER sale.
-    """
     window_start = proposed_sale_date - timedelta(days=window_days)
     window_end = proposed_sale_date + timedelta(days=window_days)
     
-    # ✅ FIXED: Extract dates first, then use pandas .between() on Series
     trade_dates = history['Date'].apply(lambda d: d.date() if hasattr(d, 'date') else d)
     
     mask = (
         (history['Ticker'] == ticker) & 
         (history['Action'] == 'BUY') &
-        (trade_dates.between(window_start, window_end))  # ✅ .between() on Series, not scalar
+        (trade_dates.between(window_start, window_end))
     )
     conflicts = history[mask].copy()
     return not conflicts.empty, conflicts
