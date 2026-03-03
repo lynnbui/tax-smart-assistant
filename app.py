@@ -170,6 +170,12 @@ if buy_clicked or sell_clicked:
                             st.success(f"💡 Try harvesting: **{', '.join(alternatives[:2])}** (no conflicts detected)")
                         else:
                             st.info("ℹ️ All supported tickers have recent activity. Consider waiting or consulting an advisor.")
+                            
+                    # --- SECTION 4: PROCEED ANYWAY ---
+                    st.subheader("4. Proceed Anyway")
+                    st.markdown("If you still wish to proceed with the sale and understand the superficial loss rules, you may proceed.")
+                    if st.button("🚨 Sell Anyway", key="btn_sell_anyway"):
+                        st.warning("⚠️ Proceeding with sale. Please consult a tax advisor and ensure you track the denied loss amount to add to your adjusted cost base.")
                 
                 else:
                     st.success("✅ **CLEAR TO TRADE**")
