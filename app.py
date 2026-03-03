@@ -16,17 +16,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- COMPLIANCE UTILITIES (Testable & Reusable) ---
-def parse_ticker_from_intent(intent: str, supported_tickers: list[str]) -> str | None:
-    """Extract ticker symbol from natural language intent using keyword matching."""
-    if not intent:
-        return None
-    intent_upper = intent.upper()
-    # Simple regex: match whole-word tickers only
-    for ticker in supported_tickers:
-        if re.search(rf'\b{re.escape(ticker)}\b', intent_upper):
-            return ticker
-    return None
-
 def check_superficial_loss(
     history: pd.DataFrame, 
     ticker: str, 
@@ -70,138 +59,129 @@ st.title("🛡️ Tax-Smart Trade Assistant")
 st.write("Proactive CRA compliance for self-directed investors.")
 st.caption("⚠️ Educational tool only. Consult a tax professional for personal advice.")
 
-# --- SECTION 1: INTENT PARSING ---
-st.subheader("1. Describe Your Trade Intent")
-user_intent = st.text_input(
-    "What would you like to do?", 
-    placeholder="e.g., I want to sell my Shopify shares to harvest a loss",
-    help="Include the ticker symbol (e.g., SHOP, XEQT, AAPL) for best results"
-)
+# --- SECTION 1: TRADE DETAILS ---
+st.subheader("1. Select Your Trade")
+
+SUPPORTED_TICKERS = ['SHOP', 'XEQT', 'AAPL', 'MSFT', 'TSLA', 'RY', 'TD']
+target_ticker = st.selectbox("Select Ticker:", SUPPORTED_TICKERS)
 
 # Optional: Let user specify sale date (defaults to today)
 proposed_sale_date = st.date_input(
-    "Proposed sale date:", 
+    "Proposed trade date:", 
     value=date.today(),
     min_value=date.today() - timedelta(days=365),
     max_value=date.today() + timedelta(days=365)
 )
 
+col1, col2 = st.columns(2)
+with col1:
+    buy_clicked = st.button("BUY", key="btn_buy", use_container_width=True, disabled=st.session_state.processing)
+with col2:
+    sell_clicked = st.button("SELL", key="btn_sell", use_container_width=True, disabled=st.session_state.processing)
+
 # --- SECTION 2: COMPLIANCE CHECK ---
-if st.button("Check Tax Impact", disabled=st.session_state.processing, key="btn_check"):
+if buy_clicked or sell_clicked:
     st.session_state.processing = True
-    
-    # Input validation
-    if not user_intent.strip():
-        st.warning("📝 Please describe your intended trade above.")
-        st.session_state.processing = False
-        st.stop()
-    
-    # Supported tickers (expand in production)
-    SUPPORTED_TICKERS = ['SHOP', 'XEQT', 'AAPL', 'MSFT', 'TSLA', 'RY', 'TD']
-    
-    # Parse intent
-    target_ticker = parse_ticker_from_intent(user_intent, SUPPORTED_TICKERS)
-    
-    if not target_ticker:
-        st.error(f"❌ Could not identify a valid ticker. Supported: {', '.join(SUPPORTED_TICKERS)}")
-        st.session_state.processing = False
-        st.stop()
+    action = "BUY" if buy_clicked else "SELL"
     
     with st.spinner(f"🔍 Analyzing tax impact for `{target_ticker}`..."):
         try:
             # Log the compliance check (audit trail)
-            logger.info(f"Compliance check: user={st.session_state.get('user', 'guest')}, ticker={target_ticker}, sale_date={proposed_sale_date}")
+            logger.info(f"Compliance check: user={st.session_state.get('user', 'guest')}, ticker={target_ticker}, action={action}, date={proposed_sale_date}")
             
-            # Run deterministic compliance engine
-            has_conflict, conflicts = check_superficial_loss(
-                st.session_state.history, 
-                target_ticker, 
-                proposed_sale_date
-            )
-            
-            # Display AI parsing result
-            st.info(f"**✅ Intent Parsed:** SELL `{target_ticker}` on **{proposed_sale_date.strftime('%b %d, %Y')}** for loss harvesting")
+            st.info(f"**✅ Trade Selected:** {action} `{target_ticker}` on **{proposed_sale_date.strftime('%b %d, %Y')}**")
             
             # --- RESULTS SECTION ---
             st.subheader("2. Compliance Radar")
             
-            if has_conflict:
-                st.error("🚨 **SUPERFICIAL LOSS WARNING**")
-                
-                # Show conflicting trades
-                for _, trade in conflicts.iterrows():
-                    trade_date = trade['Date'].date() if hasattr(trade['Date'], 'date') else trade['Date']
-                    st.markdown(f"""
-                    **Conflicting Trade Detected:**
-                    - 📅 Date: **{trade_date.strftime('%b %d, %Y')}**
-                    - 💼 Account: `{trade['Account']}`
-                    - 📊 Action: **BUY** {trade['Shares']} shares @ ${trade['Price']:.2f}
-                    """)
-                
-                # Calculate and display safe date
-                earliest_conflict = min(
-                    c['Date'].date() if hasattr(c['Date'], 'date') else c['Date'] 
-                    for _, c in conflicts.iterrows()
-                )
-                safe_date = calculate_safe_harvest_date(earliest_conflict)
-                
-                st.markdown(f"""
-                **The Impact:**  
-                Selling `{target_ticker}` at a loss on **{proposed_sale_date}** will trigger a CRA Superficial Loss denial.
-                
-                **✅ Safe to Harvest After:** **{safe_date.strftime('%b %d, %Y')}**  
-                *(30-day blackout period after the most recent conflicting buy)*
-                """)
-                
-                # --- SECTION 3: ALTERNATIVES ---
-                st.subheader("3. Smart Alternatives")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button(f"⏰ Set Reminder for {safe_date.strftime('%b %d')}", key="btn_reminder"):
-                        st.success(f"🔔 Reminder set! We'll notify you when `{target_ticker}` is eligible for loss harvesting.")
-                        # In production: integrate with notification service
-                
-                with col2:
-                    # Suggest alternative tickers with no conflicts
-                    alternatives = [
-                        t for t in SUPPORTED_TICKERS 
-                        if t != target_ticker and not check_superficial_loss(
-                            st.session_state.history, t, proposed_sale_date
-                        )[0]
-                    ]
-                    if alternatives:
-                        st.success(f"💡 Try harvesting: **{', '.join(alternatives[:2])}** (no conflicts detected)")
-                    else:
-                        st.info("ℹ️ All supported tickers have recent activity. Consider waiting or consulting an advisor.")
-            
-            else:
+            if action == "BUY":
                 st.success("✅ **CLEAR TO TRADE**")
-                st.markdown(f"""
-                No conflicting BUY orders for `{target_ticker}` detected within the 30-day window 
-                around **{proposed_sale_date.strftime('%b %d, %Y')}**.
+                st.markdown(f"Buying `{target_ticker}` does not trigger superficial loss rules. However, it may block you from harvesting losses on `{target_ticker}` for 30 days before and after **{proposed_sale_date.strftime('%b %d, %Y')}**.")
+            else:
+                # Run deterministic compliance engine
+                has_conflict, conflicts = check_superficial_loss(
+                    st.session_state.history, 
+                    target_ticker, 
+                    proposed_sale_date
+                )
                 
-                **Next Steps:**
-                1. Confirm your adjusted cost base (ACB) is up to date
-                2. Execute your trade
-                3. Document the loss for your tax filing
-                """)
-                
-                if st.button("📥 Export Compliance Report", key="btn_export"):
-                    # Generate simple report
-                    report = f"""
-                    TAX COMPLIANCE CHECK - {date.today()}
-                    Ticker: {target_ticker}
-                    Proposed Sale Date: {proposed_sale_date}
-                    Result: CLEAR TO TRADE
-                    Conflicts Found: 0
-                    """
-                    st.download_button(
-                        label="Download TXT Report",
-                        data=report,
-                        file_name=f"tax_check_{target_ticker}_{proposed_sale_date}.txt",
-                        mime="text/plain"
+                if has_conflict:
+                    st.error("🚨 **SUPERFICIAL LOSS WARNING**")
+                    
+                    # Show conflicting trades
+                    for _, trade in conflicts.iterrows():
+                        trade_date = trade['Date'].date() if hasattr(trade['Date'], 'date') else trade['Date']
+                        st.markdown(f"""
+                        **Conflicting Trade Detected:**
+                        - 📅 Date: **{trade_date.strftime('%b %d, %Y')}**
+                        - 💼 Account: `{trade['Account']}`
+                        - 📊 Action: **BUY** {trade['Shares']} shares @ ${trade['Price']:.2f}
+                        """)
+                    
+                    # Calculate and display safe date
+                    earliest_conflict = min(
+                        c['Date'].date() if hasattr(c['Date'], 'date') else c['Date'] 
+                        for _, c in conflicts.iterrows()
                     )
+                    safe_date = calculate_safe_harvest_date(earliest_conflict)
+                    
+                    st.markdown(f"""
+                    **The Impact:**  
+                    Selling `{target_ticker}` at a loss on **{proposed_sale_date}** will trigger a CRA Superficial Loss denial.
+                    
+                    **✅ Safe to Harvest After:** **{safe_date.strftime('%b %d, %Y')}**  
+                    *(30-day blackout period after the most recent conflicting buy)*
+                    """)
+                    
+                    # --- SECTION 3: ALTERNATIVES ---
+                    st.subheader("3. Smart Alternatives")
+                    col1_alt, col2_alt = st.columns(2)
+                    
+                    with col1_alt:
+                        if st.button(f"⏰ Set Reminder for {safe_date.strftime('%b %d')}", key="btn_reminder"):
+                            st.success(f"🔔 Reminder set! We'll notify you when `{target_ticker}` is eligible for loss harvesting.")
+                            # In production: integrate with notification service
+                    
+                    with col2_alt:
+                        # Suggest alternative tickers with no conflicts
+                        alternatives = [
+                            t for t in SUPPORTED_TICKERS 
+                            if t != target_ticker and not check_superficial_loss(
+                                st.session_state.history, t, proposed_sale_date
+                            )[0]
+                        ]
+                        if alternatives:
+                            st.success(f"💡 Try harvesting: **{', '.join(alternatives[:2])}** (no conflicts detected)")
+                        else:
+                            st.info("ℹ️ All supported tickers have recent activity. Consider waiting or consulting an advisor.")
+                
+                else:
+                    st.success("✅ **CLEAR TO TRADE**")
+                    st.markdown(f"""
+                    No conflicting BUY orders for `{target_ticker}` detected within the 30-day window 
+                    around **{proposed_sale_date.strftime('%b %d, %Y')}**.
+                    
+                    **Next Steps:**
+                    1. Confirm your adjusted cost base (ACB) is up to date
+                    2. Execute your trade
+                    3. Document the loss for your tax filing
+                    """)
+                    
+                    if st.button("📥 Export Compliance Report", key="btn_export"):
+                        # Generate simple report
+                        report = f"""
+                        TAX COMPLIANCE CHECK - {date.today()}
+                        Ticker: {target_ticker}
+                        Proposed Sale Date: {proposed_sale_date}
+                        Result: CLEAR TO TRADE
+                        Conflicts Found: 0
+                        """
+                        st.download_button(
+                            label="Download TXT Report",
+                            data=report,
+                            file_name=f"tax_check_{target_ticker}_{proposed_sale_date}.txt",
+                            mime="text/plain"
+                        )
                     
         except Exception as e:
             logger.error(f"Compliance check failed: {str(e)}", exc_info=True)
