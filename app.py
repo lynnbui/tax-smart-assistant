@@ -240,11 +240,13 @@ with st.expander("🔍 View 30-Day Activity Log (Data Source)"):
 # --- FOOTER / DISCLAIMER ---
 st.markdown("---")
 st.markdown("""
-:small[* **Disclaimer**: This tool provides educational guidance only and does not constitute tax, legal, or financial advice. 
-CRA superficial loss rules (Income Tax Act Section 54) are complex and fact-specific. 
-Always consult a qualified tax professional before executing tax-loss harvesting strategies. 
-Wealthsimple does not guarantee the accuracy of compliance determinations.*]
-""")
+<p style="font-size: 0.85em; color: grey; font-style: italic;">
+<strong>Disclaimer:</strong> This tool provides educational guidance only and does not constitute tax, legal, or financial advice.
+CRA superficial loss rules (Income Tax Act Section 54) are complex and fact-specific.
+Always consult a qualified tax professional before executing tax-loss harvesting strategies.
+Wealthsimple does not guarantee the accuracy of compliance determinations.
+</p>
+""", unsafe_allow_html=True)
 
 # --- DEV MODE TOGGLE (Remove in production) ---
 if st.checkbox("🔧 Dev Mode: Show Session State", key="dev_toggle"):
