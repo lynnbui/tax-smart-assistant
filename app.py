@@ -30,10 +30,14 @@ def check_superficial_loss(
     # Check for exact ticker or identical properties
     tickers_to_check = [ticker]
     
-    # Edge case: Identical properties (e.g. S&P 500 ETFs)
+    # Edge case: Identical properties (Different ETFs tracking the same index)
     IDENTICAL_PROPERTIES = {
+        # S&P 500 Index
         'VFV.TO': ['ZSP.TO'],
-        'ZSP.TO': ['VFV.TO']
+        'ZSP.TO': ['VFV.TO'],
+        # US Total Market Index
+        'XUU.TO': ['VUN.TO'],
+        'VUN.TO': ['XUU.TO']
     }
     if ticker in IDENTICAL_PROPERTIES:
         tickers_to_check.extend(IDENTICAL_PROPERTIES[ticker])
@@ -54,12 +58,12 @@ def calculate_safe_harvest_date(conflict_date: date) -> date:
 if 'history' not in st.session_state:
     # Mock realistic trade history with timezone-aware dates
     st.session_state.history = pd.DataFrame({
-        'Date': pd.to_datetime(['2026-02-15', '2026-02-20', '2026-03-01', '2026-02-25', '2026-02-28']),
-        'Ticker': ['SHOP', 'XEQT', 'SHOP', 'VFV.TO', 'ZSP.TO'],
-        'Action': ['BUY', 'BUY', 'BUY', 'BUY', 'BUY'],
-        'Shares': [10, 50, 15, 100, 50],
-        'Price': [105.00, 32.00, 98.50, 130.00, 75.00],
-        'Account': ['Self-Directed TFSA', 'Self-Directed RRSP', 'Self-Directed TFSA', 'Self-Directed Margin', 'Self-Directed TFSA']
+        'Date': pd.to_datetime(['2026-02-15', '2026-02-20', '2026-03-01', '2026-02-25', '2026-02-28', '2026-02-15', '2026-03-01']),
+        'Ticker': ['SHOP', 'XEQT', 'SHOP', 'VFV.TO', 'ZSP.TO', 'XUU.TO', 'VUN.TO'],
+        'Action': ['BUY', 'BUY', 'BUY', 'BUY', 'BUY', 'BUY', 'BUY'],
+        'Shares': [10, 50, 15, 100, 50, 200, 150],
+        'Price': [105.00, 32.00, 98.50, 130.00, 75.00, 45.00, 80.00],
+        'Account': ['Self-Directed TFSA', 'Self-Directed RRSP', 'Self-Directed TFSA', 'Self-Directed Margin', 'Self-Directed TFSA', 'Self-Directed RRSP', 'Self-Directed Margin']
     })
 
 if 'processing' not in st.session_state:
@@ -73,7 +77,7 @@ st.caption("⚠️ Educational tool only. Consult a tax professional for persona
 # --- SECTION 1: TRADE DETAILS ---
 st.subheader("1. Select Your Trade")
 
-SUPPORTED_TICKERS = ['SHOP', 'XEQT', 'AAPL', 'MSFT', 'TSLA', 'RY', 'TD', 'VFV.TO', 'ZSP.TO']
+SUPPORTED_TICKERS = ['SHOP', 'XEQT', 'AAPL', 'MSFT', 'TSLA', 'RY', 'TD', 'VFV.TO', 'ZSP.TO', 'XUU.TO', 'VUN.TO']
 target_ticker = st.selectbox("Select Ticker:", SUPPORTED_TICKERS)
 
 # Optional: Let user specify sale date (defaults to today)
