@@ -214,14 +214,14 @@ if st.button("Check Tax Impact", disabled=st.session_state.processing, key="btn_
 with st.expander("🔍 View 30-Day Activity Log (Data Source)"):
     st.caption("This is the transaction history the compliance engine scans.")
     
-    # Filter to relevant window for clarity
     window_start = date.today() - timedelta(days=30)
     window_end = date.today() + timedelta(days=30)
     
+    trade_dates = st.session_state.history['Date'].apply(
+        lambda d: d.date() if hasattr(d, 'date') else d
+    )
     visible_history = st.session_state.history[
-        st.session_state.history['Date'].apply(
-            lambda d: (d.date() if hasattr(d, 'date') else d) between (window_start, window_end)
-        )
+        trade_dates.between(window_start, window_end)
     ].copy()
     
     if not visible_history.empty:
