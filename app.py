@@ -19,12 +19,11 @@ logger = logging.getLogger(__name__)
 def check_superficial_loss(
     history: pd.DataFrame, 
     ticker: str, 
-    proposed_date: date,
-    proposed_action: str = 'SELL',
+    proposed_sale_date: date,
     window_days: int = 30
 ) -> tuple[bool, pd.DataFrame]:
-    window_start = proposed_date - timedelta(days=window_days)
-    window_end = proposed_date + timedelta(days=window_days)
+    window_start = proposed_sale_date - timedelta(days=window_days)
+    window_end = proposed_sale_date + timedelta(days=window_days)
     
     trade_dates = history['Date'].apply(lambda d: d.date() if hasattr(d, 'date') else d)
     
@@ -39,11 +38,9 @@ def check_superficial_loss(
     if ticker in IDENTICAL_PROPERTIES:
         tickers_to_check.extend(IDENTICAL_PROPERTIES[ticker])
         
-    conflict_action = 'BUY' if proposed_action == 'SELL' else 'SELL'
-        
     mask = (
         (history['Ticker'].isin(tickers_to_check)) & 
-        (history['Action'] == conflict_action) &
+        (history['Action'] == 'BUY') &
         (trade_dates.between(window_start, window_end))
     )
     conflicts = history[mask].copy()
@@ -57,12 +54,12 @@ def calculate_safe_harvest_date(conflict_date: date) -> date:
 if 'history' not in st.session_state:
     # Mock realistic trade history with timezone-aware dates
     st.session_state.history = pd.DataFrame({
-        'Date': pd.to_datetime(['2026-02-15', '2026-02-20', '2026-03-01', '2026-02-25', '2026-02-28', '2026-02-10', '2026-02-18']),
-        'Ticker': ['SHOP', 'XEQT', 'SHOP', 'VFV.TO', 'ZSP.TO', 'AAPL', 'MSFT'],
-        'Action': ['BUY', 'BUY', 'BUY', 'BUY', 'BUY', 'SELL', 'SELL'],
-        'Shares': [10, 50, 15, 100, 50, 20, 15],
-        'Price': [105.00, 32.00, 98.50, 130.00, 75.00, 175.00, 400.00],
-        'Account': ['Self-Directed TFSA', 'Self-Directed RRSP', 'Self-Directed TFSA', 'Self-Directed Margin', 'Self-Directed TFSA', 'Self-Directed Margin', 'Self-Directed Margin']
+        'Date': pd.to_datetime(['2026-02-15', '2026-02-20', '2026-03-01', '2026-02-25', '2026-02-28']),
+        'Ticker': ['SHOP', 'XEQT', 'SHOP', 'VFV.TO', 'ZSP.TO'],
+        'Action': ['BUY', 'BUY', 'BUY', 'BUY', 'BUY'],
+        'Shares': [10, 50, 15, 100, 50],
+        'Price': [105.00, 32.00, 98.50, 130.00, 75.00],
+        'Account': ['Self-Directed TFSA', 'Self-Directed RRSP', 'Self-Directed TFSA', 'Self-Directed Margin', 'Self-Directed TFSA']
     })
 
 if 'processing' not in st.session_state:
@@ -108,35 +105,37 @@ if buy_clicked or sell_clicked:
             # --- RESULTS SECTION ---
             st.subheader("2. Compliance Radar")
             
-            # Run deterministic compliance engine
-            has_conflict, conflicts = check_superficial_loss(
-                st.session_state.history, 
-                target_ticker, 
-                proposed_sale_date,
-                action
-            )
-            
-            if has_conflict:
-                st.error("🚨 **SUPERFICIAL LOSS WARNING**")
-                
-                # Show conflicting trades
-                for _, trade in conflicts.iterrows():
-                    trade_date = trade['Date'].date() if hasattr(trade['Date'], 'date') else trade['Date']
-                    st.markdown(f"""
-                    **Conflicting Trade Detected:**
-                    - 📅 Date: **{trade_date.strftime('%b %d, %Y')}**
-                    - 💼 Account: `{trade['Account']}`
-                    - 📊 Action: **{trade['Action']}** {trade['Shares']} shares @ ${trade['Price']:.2f}
-                    """)
-                
-                # Calculate and display safe date
-                earliest_conflict = min(
-                    c['Date'].date() if hasattr(c['Date'], 'date') else c['Date'] 
-                    for _, c in conflicts.iterrows()
+            if action == "BUY":
+                st.success("✅ **CLEAR TO TRADE**")
+                st.markdown(f"Buying `{target_ticker}` does not trigger superficial loss rules. However, it may block you from harvesting losses on `{target_ticker}` for 30 days before and after **{proposed_sale_date.strftime('%b %d, %Y')}**.")
+            else:
+                # Run deterministic compliance engine
+                has_conflict, conflicts = check_superficial_loss(
+                    st.session_state.history, 
+                    target_ticker, 
+                    proposed_sale_date
                 )
-                safe_date = calculate_safe_harvest_date(earliest_conflict)
                 
-                if action == "SELL":
+                if has_conflict:
+                    st.error("🚨 **SUPERFICIAL LOSS WARNING**")
+                    
+                    # Show conflicting trades
+                    for _, trade in conflicts.iterrows():
+                        trade_date = trade['Date'].date() if hasattr(trade['Date'], 'date') else trade['Date']
+                        st.markdown(f"""
+                        **Conflicting Trade Detected:**
+                        - 📅 Date: **{trade_date.strftime('%b %d, %Y')}**
+                        - 💼 Account: `{trade['Account']}`
+                        - 📊 Action: **BUY** {trade['Shares']} shares @ ${trade['Price']:.2f}
+                        """)
+                    
+                    # Calculate and display safe date
+                    earliest_conflict = min(
+                        c['Date'].date() if hasattr(c['Date'], 'date') else c['Date'] 
+                        for _, c in conflicts.iterrows()
+                    )
+                    safe_date = calculate_safe_harvest_date(earliest_conflict)
+                    
                     st.markdown(f"""
                     **The Impact:**  
                     Selling `{target_ticker}` at a loss on **{proposed_sale_date}** will trigger a CRA Superficial Loss denial.
@@ -144,41 +143,31 @@ if buy_clicked or sell_clicked:
                     **✅ Safe to Harvest After:** **{safe_date.strftime('%b %d, %Y')}**  
                     *(30-day blackout period after the most recent conflicting buy)*
                     """)
-                else:
-                    st.markdown(f"""
-                    **The Impact:**  
-                    Buying `{target_ticker}` on **{proposed_sale_date}** will turn your recent `SELL` into a CRA Superficial Loss.
-                    If you sold at a loss recently, you will not be able to claim that loss!
                     
-                    **✅ Safe to Buy After:** **{safe_date.strftime('%b %d, %Y')}**  
-                    *(30-day blackout period after the most recent conflicting sell)*
-                    """)
+                    # --- SECTION 3: ALTERNATIVES ---
+                    st.subheader("3. Smart Alternatives")
+                    col1_alt, col2_alt = st.columns(2)
+                    
+                    with col1_alt:
+                        if st.button(f"⏰ Set Reminder for {safe_date.strftime('%b %d')}", key="btn_reminder"):
+                            st.success(f"🔔 Reminder set! We'll notify you when `{target_ticker}` is eligible for loss harvesting.")
+                            # In production: integrate with notification service
+                    
+                    with col2_alt:
+                        # Suggest alternative tickers with no conflicts
+                        alternatives = [
+                            t for t in SUPPORTED_TICKERS 
+                            if t != target_ticker and not check_superficial_loss(
+                                st.session_state.history, t, proposed_sale_date
+                            )[0]
+                        ]
+                        if alternatives:
+                            st.success(f"💡 Try harvesting: **{', '.join(alternatives[:2])}** (no conflicts detected)")
+                        else:
+                            st.info("ℹ️ All supported tickers have recent activity. Consider waiting or consulting an advisor.")
                 
-                # --- SECTION 3: ALTERNATIVES ---
-                st.subheader("3. Smart Alternatives")
-                col1_alt, col2_alt = st.columns(2)
-                
-                with col1_alt:
-                    if st.button(f"⏰ Set Reminder for {safe_date.strftime('%b %d')}", key="btn_reminder"):
-                        st.success(f"🔔 Reminder set! We'll notify you when it's safe to trade `{target_ticker}`.")
-                        # In production: integrate with notification service
-                
-                with col2_alt:
-                    # Suggest alternative tickers with no conflicts
-                    alternatives = [
-                        t for t in SUPPORTED_TICKERS 
-                        if t != target_ticker and not check_superficial_loss(
-                            st.session_state.history, t, proposed_sale_date, action
-                        )[0]
-                    ]
-                    if alternatives:
-                        st.success(f"💡 Try `{alternatives[0]}`: (no conflicts detected)")
-                    else:
-                        st.info("ℹ️ All supported tickers have recent activity. Consider waiting or consulting an advisor.")
-            
-            else:
-                st.success("✅ **CLEAR TO TRADE**")
-                if action == "SELL":
+                else:
+                    st.success("✅ **CLEAR TO TRADE**")
                     st.markdown(f"""
                     No conflicting BUY orders for `{target_ticker}` detected within the 30-day window 
                     around **{proposed_sale_date.strftime('%b %d, %Y')}**.
@@ -188,28 +177,22 @@ if buy_clicked or sell_clicked:
                     2. Execute your trade
                     3. Document the loss for your tax filing
                     """)
-                else:
-                    st.markdown(f"""
-                    No conflicting SELL orders for `{target_ticker}` detected within the 30-day window 
-                    around **{proposed_sale_date.strftime('%b %d, %Y')}**. Buying will not trigger a superficial loss rule on a prior sale.
-                    """)
-                
-                if st.button("📥 Export Compliance Report", key="btn_export"):
-                    # Generate simple report
-                    report = f"""
-                    TAX COMPLIANCE CHECK - {date.today()}
-                    Ticker: {target_ticker}
-                    Action: {action}
-                    Proposed Date: {proposed_sale_date}
-                    Result: CLEAR TO TRADE
-                    Conflicts Found: 0
-                    """
-                    st.download_button(
-                        label="Download TXT Report",
-                        data=report,
-                        file_name=f"tax_check_{target_ticker}_{proposed_sale_date}.txt",
-                        mime="text/plain"
-                    )
+                    
+                    if st.button("📥 Export Compliance Report", key="btn_export"):
+                        # Generate simple report
+                        report = f"""
+                        TAX COMPLIANCE CHECK - {date.today()}
+                        Ticker: {target_ticker}
+                        Proposed Sale Date: {proposed_sale_date}
+                        Result: CLEAR TO TRADE
+                        Conflicts Found: 0
+                        """
+                        st.download_button(
+                            label="Download TXT Report",
+                            data=report,
+                            file_name=f"tax_check_{target_ticker}_{proposed_sale_date}.txt",
+                            mime="text/plain"
+                        )
                     
         except Exception as e:
             logger.error(f"Compliance check failed: {str(e)}", exc_info=True)
