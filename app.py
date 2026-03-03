@@ -240,12 +240,10 @@ with st.expander("🔍 View 30-Day Activity Log (Data Source)"):
 # --- FOOTER / DISCLAIMER ---
 st.markdown("---")
 st.markdown("""
-<small>
-**Disclaimer**: This tool provides educational guidance only and does not constitute tax, legal, or financial advice. 
+:small[**Disclaimer**: This tool provides educational guidance only and does not constitute tax, legal, or financial advice. 
 CRA superficial loss rules (Income Tax Act Section 54) are complex and fact-specific. 
 Always consult a qualified tax professional before executing tax-loss harvesting strategies. 
-Wealthsimple does not guarantee the accuracy of compliance determinations.
-</small>
+Wealthsimple does not guarantee the accuracy of compliance determinations.]
 """)
 
 # --- DEV MODE TOGGLE (Remove in production) ---
