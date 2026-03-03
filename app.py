@@ -44,11 +44,13 @@ def check_superficial_loss(
     window_start = proposed_sale_date - timedelta(days=window_days)
     window_end = proposed_sale_date + timedelta(days=window_days)
     
-    # Filter for matching ticker + BUY actions within the window
+    # ✅ FIXED: Extract dates first, then use pandas .between() on Series
+    trade_dates = history['Date'].apply(lambda d: d.date() if hasattr(d, 'date') else d)
+    
     mask = (
         (history['Ticker'] == ticker) & 
         (history['Action'] == 'BUY') &
-        (history['Date'].apply(lambda d: d.date() if hasattr(d, 'date') else d).between(window_start, window_end))
+        (trade_dates.between(window_start, window_end))  # ✅ .between() on Series, not scalar
     )
     conflicts = history[mask].copy()
     return not conflicts.empty, conflicts
